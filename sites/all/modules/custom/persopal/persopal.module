@@ -113,7 +113,7 @@ function persopal_views_pre_view(&$view) {
 
     if($view->name == 'jobs_vew' && $view->current_display == 'panel_pane_2') {
 
-        $value = "Your location:". $_SESSION['smart_ip']['location']['country'] ." " .$_SESSION['smart_ip']['location']['city'] .$_SESSION['smart_ip']['location']['region'] ;
+        $value = "Your location: ". $_SESSION['smart_ip']['location']['country'] ." " .$_SESSION['smart_ip']['location']['city'] ." " .$_SESSION['smart_ip']['location']['region'] ;
         $options = array(
             'id' => 'area',
             'table' => 'views',
@@ -145,12 +145,12 @@ function persopal_page_alter(&$page) {
 }
 
 function persopal_visitor_action_subscribe($action){
-    dpm($action);
+
     return array('my_visitor_action_subscriber');
 }
 
 function my_visitor_action_subscriber($name, $context) {
-    dpm($context);
+
 }
 
 /**
