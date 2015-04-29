@@ -1,0 +1,80 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for the WEM module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function wem_install() {
+  // Set a random token value.
+  variable_set('wem_token_value', user_password(32));
+
+  // By default, don't track admin pages.
+  wem_save_pages_dont_track(array('/admin/'));
+
+  // By default, don't track the administrator.
+  $admin = user_load(1);
+  variable_set('wem_users_dont_track', array($admin->name));
+
+  // By default, track all authenticated users.
+  variable_set('wem_track_user_role_authenticated_user', TRUE);
+
+  // By default, sending to other analytics disabled.
+  variable_set('wem_analytics_ga', FALSE);
+}
+
+/**
+ * Implements hook_schema().
+ */
+function wem_schema() {
+  $schema['wem'] = array(
+    'fields' => array(
+      'id' => array('type' => 'serial', 'signed' => FALSE, 'null' => TRUE),
+      'uid' => array(
+        'type' => 'varchar',
+        'length' => 16,
+        'null' => TRUE,
+        'size' => 'normal',
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'null' => TRUE,
+        'size' => 'normal',
+      ),
+      'value' => array(
+        'type' => 'varchar',
+        'length' => 512,
+        'null' => TRUE,
+        'size' => 'normal',
+      ),
+      'data' => array('type' => 'text', 'size' => 'normal'),
+      'timestamp' => array(
+        'type' => 'int',
+        'signed' => FALSE,
+        'null' => TRUE,
+        'size' => 'big',
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'uid' => array('uid'),
+    ),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function wem_uninstall() {
+  variable_del('wem_token_value');
+  variable_del('wem_tracked_node_types');
+  variable_del('wem_pages_dont_track');
+  variable_del('wem_users_dont_track');
+  variable_del('wem_analytics_ga');
+  variable_del('wem_roles_track');
+  variable_del('wem_debug_mode');
+}

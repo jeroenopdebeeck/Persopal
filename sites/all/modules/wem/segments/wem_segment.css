@@ -1,0 +1,114 @@
+/*
+* Display the add rule form 'inline'.
+*/
+#wem-segment-admin-rule-form #edit-save-rule .form-item,
+#wem-segment-admin-rule-form #edit-save-rule .form-item label {
+  display: inline;
+}
+
+#wem-segment-admin-rule-form tr.active {
+  background-color: #ccffcc;
+}
+
+#wem-segment-admin-rule-form #edit-event-category-custom{
+  display: none;
+}
+
+/*
+* Make the inputs smaller.
+*/
+#wem-segment-admin-rule-form #edit-save-rule .form-item input {
+  width: 100px;
+}
+
+#wem-segment-admin-rule-form #edit-save-rule .form-item input,
+#wem-segment-admin-rule-form #edit-save-rule .form-item select {
+  margin-left: 5px;
+  margin-right: 5px;
+}
+
+#wem-segment-admin-rule-form #edit-save-rule .form-item input#edit-event-points {
+  width: 50px;
+}
+
+#wem-segment-admin-rule-form #edit-save-rule .help-text {
+  color: #666;
+  margin-bottom: 0px;
+  margin-top: 20px;
+}
+
+#wem-segment-admin-rule-form #edit-save-rule #edit-event-submit {
+  display: block;
+  margin-top: 15px;
+}
+
+/**
+ * Segment styling.
+ */
+#edit-segment-categories .link {
+  background: none;
+  border: 0;
+  color: #0074bd;
+  font-size: 10pt !important;
+  padding: 0;
+  text-shadow: none;
+}
+
+#wem-segment-admin-segment-form #edit-add-category:hover {
+  text-decoration: underline;
+}
+
+[id*="static"] .form-item {
+  display: inline;
+}
+
+#edit-segment-categories .form-item input,
+#edit-segment-categories .form-item select {
+  margin-left: 5px;
+  margin-right: 5px;
+}
+
+[id*="static-rule"] {
+  margin-bottom: 5px;
+}
+
+#edit-segment-type-static-add-segment-rule {
+  margin-top: 5px;
+}
+
+.form-type-select {
+  display: inline;
+}
+
+.fieldset-description {
+  color: #666;
+  margin-bottom: 15px;
+  margin-top: -5px;
+}
+
+#edit-segments .form-item {
+  margin: 0;
+  padding: 0 0 10px 0;
+}
+
+#edit-segments .form-type-checkbox {
+  display: inline;
+  margin-right: 10px;
+}
+
+#edit-segments hr {
+  margin-bottom: 10px;
+  margin-top: 10px;
+}
+
+.page-node-edit #edit-segments table {
+  width: 45%;
+}
+
+.page-node-edit #edit-segments table tr.disabled {
+  background-color: #eee;
+}
+
+.page-node-edit #edit-segments table tr.disabled td {
+  color: #999;
+}

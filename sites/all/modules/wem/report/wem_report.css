@@ -1,0 +1,17 @@
+#edit-filter .form-item {
+  border: 1px #ccc solid;
+  float: left;
+  margin: 5px;
+  padding: 10px;
+  width: 200px;
+}
+
+#edit-filter .form-item input,
+#edit-filter .form-item select {
+  width: 95%;
+}
+
+#edit-filter #edit-buttons {
+  clear: both;
+  display: block;
+}

@@ -1,0 +1,206 @@
+<?php
+/**
+ * @file
+ * Test file for wem_segment module.
+ */
+
+class WEMSegmentTestCase extends DrupalWebTestCase {
+
+  protected $createdNodes;
+
+  /**
+   * Returns info for the testing interface.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'WEM Segments',
+      'description' => 'Ensures the wem segment functionality works as intended.',
+      'group' => 'WEM',
+    );
+  }
+
+  /**
+   * SetUp function.
+   */
+  public function setUp() {
+    $this->profile = 'testing';
+    parent::setUp(array('wem', 'wem_segment'));
+    global $user;
+    $user = $this->drupalCreateUser();
+    $this->drupalLogin($user);
+    $this->insertEvents();
+    $this->insertRules();
+    $this->insertSegments();
+    $this->insertNodes();
+  }
+
+  /**
+   * Test to make sure user has segment associated with them.
+   */
+  public function testWemSegments() {
+    // Build segment cache.
+    wem_segment_cron();
+    $user = user_load($this->loggedInUser->uid, TRUE);
+    $this->assertFalse(count($user->segments) == 0, "User has segments.");
+    $this->assertTrue(in_array("Low Engagement", $user->segments), "User has 'Low Engagement' segment.");
+    $this->assertTrue(in_array("Segment 1", $user->segments), "User has 'Segment 1' segment.");
+    $this->assertFalse(in_array("Segment 2", $user->segments), "User does not have 'Segment 2' segment.");
+    // Filter nodes by this users segments.
+    $filtered_nodes = wem_segment_filter_nodes($this->createdNodes, $user);
+    $this->assertEqual(count($filtered_nodes) == 0, "User cannot view these nodes.");
+
+    // Add more events and rebuild cache.
+    $this->insertEvents();
+    wem_segment_cron();
+    $user = user_load($this->loggedInUser->uid, TRUE);
+    $this->assertFalse(in_array("Low Engagement", $user->segments), "User does not have 'Low Engagement' segment.");
+    $this->assertTrue(in_array("Medium Engagement", $user->segments), "User has 'Medium Engagement' segment.");
+    // Filter nodes by this users segments.
+    $filtered_nodes = wem_segment_filter_nodes($this->createdNodes, $user);
+    $this->assertEqual(count($filtered_nodes) == 0, "User cannot view these nodes.");
+
+    // Add more events and rebuild cache.
+    $this->insertEvents();
+    wem_segment_cron();
+    $user = user_load($this->loggedInUser->uid, TRUE);
+    $this->assertTrue(in_array("High Engagement", $user->segments), "User has 'High Engagement' segment.");
+    // Filter nodes by this users segments.
+    $filtered_nodes = wem_segment_filter_nodes($this->createdNodes, $user);
+    $this->assertEqual(count($filtered_nodes) == 3, "User can view these nodes.");
+  }
+
+  /**
+   * Adds node segments for content.
+   */
+  protected function insertNodes() {
+    // Create 3 nodes to work from.
+    $node = $this->drupalCreateNode();
+    $this->addNodeSegments($node);
+    $new_node = node_load($node->nid);
+    $this->createdNodes[] = $new_node;
+    $node = $this->drupalCreateNode();
+    $this->addNodeSegments($node);
+    $new_node = node_load($node->nid);
+    $this->createdNodes[] = $new_node;
+    $node = $this->drupalCreateNode();
+    $this->addNodeSegments($node);
+    $new_node = node_load($node->nid);
+    $this->createdNodes[] = $new_node;
+  }
+
+  /**
+   * Adds segments to a node.
+   */
+  protected function addNodeSegments($node) {
+    $segments = array(
+      "High Engagement" => array(
+        "has_segment" => "show",
+        "no_segment" => "hide",
+      ),
+      "Medium Engagement" => array(
+        "has_segment" => 0,
+        "no_segment" => 0,
+      ),
+      "Low Engagement" => array(
+        "has_segment" => 0,
+        "no_segment" => 0,
+      ),
+    );
+    wem_segment_set_node_segments($node->nid, $segments);
+  }
+
+  /**
+   * Adds events to the system for testing.
+   */
+  protected function insertEvents() {
+    $events[] = array(
+      'name' => 'page_view',
+      'value' => 'node/segment1/test-this1',
+      'uid' => $this->loggedInUser->uid,
+    );
+    $events[] = array(
+      'name' => 'page_view',
+      'value' => 'node/segment1/test-this2',
+      'uid' => $this->loggedInUser->uid,
+    );
+    $events[] = array(
+      'name' => 'page_view',
+      'value' => 'node/segment1/test-this3',
+      'uid' => $this->loggedInUser->uid,
+    );
+    $events[] = array(
+      'name' => 'page_view',
+      'value' => 'node/segment2/test-that',
+      'uid' => $this->loggedInUser->uid,
+    );
+    foreach ($events as $fields) {
+      wem_event_track($fields);
+    }
+  }
+
+  /**
+   * Adds rules for testing.
+   */
+  protected function insertRules() {
+    // For page_view event, engagement gets 1 point.
+    wem_segment_create_rule("page_view", "", "", "engagement", 1);
+    // For page_view containing "segment1", that category gets 1 point.
+    wem_segment_create_rule("page_view", "containing", "segment1", "segment1", 1);
+    // For page_view containing "segment2", that category gets 1 point.
+    wem_segment_create_rule("page_view", "containing", "segment2", "segment2", 1);
+    // For a page_view of "test-this1" segment1 gets 5 points.
+    wem_segment_create_rule("page_view", "containing", "test-this1", "segment1", 5);
+  }
+
+  /**
+   * Adds segments to the database for testing.
+   */
+  protected function insertSegments() {
+    $params = array();
+    $params[] = array(
+      'category' => "engagement",
+      'operator' => ">",
+      'points' => 0,
+    );
+    $params[] = array(
+      'category' => "engagement",
+      'operator' => "<",
+      'points' => 5,
+    );
+    wem_segment_save_segment("Low Engagement", "static", $params);
+    $params = array();
+    $params[] = array(
+      'category' => "engagement",
+      'operator' => ">=",
+      'points' => 5,
+    );
+    $params[] = array(
+      'category' => "engagement",
+      'operator' => "<",
+      'points' => 10,
+    );
+    wem_segment_save_segment("Medium Engagement", "static", $params);
+    $params = array();
+    $params[] = array(
+      'category' => "engagement",
+      'operator' => ">=",
+      'points' => 10,
+    );
+    wem_segment_save_segment("High Engagement", "static", $params);
+    $params = array();
+    $params[] = array(
+      'category' => "segment1",
+      'operator' => ">",
+      'points' => 2,
+    );
+    wem_segment_save_segment("Segment 1", "static", $params);
+    $params = array();
+    $params[] = array(
+      'category' => "segment2",
+      'operator' => ">",
+      'points' => 2,
+    );
+    wem_segment_save_segment("Segment 2", "static", $params);
+  }
+
+}

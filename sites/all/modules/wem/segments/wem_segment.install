@@ -1,0 +1,121 @@
+<?php
+/**
+ * @file
+ * Creates schema and cache table for wem_segment.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function wem_segment_schema() {
+  $schema = array(
+    'wem_segment_rules' => array(
+      'description' => 'Base table for storing WEM segment rules',
+      'fields' => array(
+        'hash' => array(
+          'type' => 'varchar',
+          'length' => 40,
+        ),
+        'rid' => array(
+          'description' => 'The primary identifier for a segment rule.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'no export' => TRUE,
+        ),
+        'event_name' => array(
+          'type' => 'varchar',
+          'length' => 128,
+        ),
+        'event_operator' => array(
+          'type' => 'varchar',
+          'length' => 32,
+        ),
+        'event_value' => array(
+          'type' => 'varchar',
+          'length' => 128,
+        ),
+        'event_category' => array(
+          'type' => 'varchar',
+          'length' => 64,
+        ),
+        'event_points' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+        ),
+        'created' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'size' => 'big',
+        ),
+      ),
+      'primary key' => array('rid'),
+    ),
+    'wem_segment' => array(
+      'description' => 'Base table for storing WEM segments',
+      'fields' => array(
+        'sid' => array(
+          'description' => 'The primary identifier for a segment.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'name' => array(
+          'type' => 'varchar',
+          'length' => 128,
+        ),
+        'created' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'size' => 'big',
+        ),
+      ),
+      'primary key' => array('sid'),
+    ),
+    'wem_segment_node' => array(
+      'description' => 'Table for node segment settings',
+      'fields' => array(
+        'nid' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+        ),
+        'segments' => array(
+          'type' => 'text',
+          'length' => 512,
+          'serialize' => TRUE,
+        ),
+      ),
+      'primary key' => array('nid'),
+    ),
+    'wem_segment_params' => array(
+      'description' => 'Base table for storing WEM segment params',
+      'fields' => array(
+        'pid' => array(
+          'description' => 'The primary identifier for a segment param.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'sid' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+        ),
+        'type' => array(
+          'type' => 'varchar',
+          'length' => 128,
+        ),
+        'params' => array(
+          'type' => 'text',
+          'length' => 512,
+          'serialize' => TRUE,
+        ),
+      ),
+      'primary key' => array('pid'),
+    ),
+  );
+  // Use our own cache table because we can create lots of entries,
+  // that slow down and clutter the default cache.
+  $schema['cache_wem_segment'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_wem_segment']['description'] = 'Cache table for storing user WEM segments.';
+  return $schema;
+}

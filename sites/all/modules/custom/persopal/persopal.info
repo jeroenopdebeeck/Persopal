@@ -1,0 +1,6 @@
+name = Persopal
+description = Custom module for the persopal project.
+core = 7.x
+package = Persopal
+
+dependencies[] = wem

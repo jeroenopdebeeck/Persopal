@@ -1,0 +1,24 @@
+<?php
+/**
+ * @file
+ * Base file for the WEM reports dashboard.
+ */
+
+
+/**
+ * Implements hook_menu().
+ */
+function wem_report_menu() {
+  return array(
+    'admin/reports/wem' => array(
+      'title' => 'WEM Report',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('wem_report_admin_form'),
+      'access arguments' => array('admin wem'),
+      'type' => MENU_LOCAL_TASK,
+      'weight' => 2,
+      'file' => 'wem_report.admin.inc',
+      'description' => 'WEM event reporting dashboard.',
+    ),
+  );
+}

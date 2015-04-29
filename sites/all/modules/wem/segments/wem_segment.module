@@ -1,0 +1,394 @@
+<?php
+/**
+ * @file
+ * Base file for WEM segments
+ */
+
+module_load_include('inc', 'wem_segment', 'wem_segment.admin');
+module_load_include('inc', 'wem_segment', 'wem_segment.views');
+
+/**
+ * Implements hook_init().
+ */
+function wem_segment_init() {
+  // Apply WEM ID and segments to global $user object.
+  global $user;
+  if (empty($user->wem_id)) {
+    $user->wem_id = wem_get_user_id();
+    $user->segments = wem_segment_load_user_segments($user->wem_id);
+    drupal_add_js(array("wem" => array("segment" => array("user_segments" => $user->segments))), "setting");
+  }
+  // Check if user is on a node edit page.
+  if (arg(0) == 'node' && arg(2) == 'edit') {
+    $segments = wem_segment_get_node_segments(arg(1));
+    if (empty($segments)) {
+      $node_copy = "WEM Disabled";
+    }
+    else {
+      $node_copy = "WEM Enabled";
+    }
+    drupal_add_js(array('wem' => array("segment" => array('nodeFormCopy' => $node_copy))), "setting");
+  }
+
+  drupal_add_js(array('wem' => array('analytics' => array('ga' => array('dimensions' => array('segment' => variable_get('wem_analytics_ga_dimensions_segment')))))), "setting");
+}
+
+/**
+ * Implements hook_features_api().
+ */
+function wem_segment_features_api() {
+  return array(
+    'wem_segment_segments' => array(
+      'name' => t('WEM Segments'),
+      'file' => drupal_get_path('module', 'wem_segment') . '/wem_segment.features.inc',
+      'default_hook' => 'wem_segment_import_segments',
+      'default_file' => FEATURES_DEFAULTS_INCLUDED,
+      'feature_source' => TRUE,
+    ),
+    'wem_segment_rules' => array(
+      'name' => t('WEM Segment Rules'),
+      'file' => drupal_get_path('module', 'wem_segment') . '/wem_segment.features.inc',
+      'default_hook' => 'wem_segment_import_rules',
+      'default_file' => FEATURES_DEFAULTS_INCLUDED,
+      'feature_source' => TRUE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function wem_segment_menu() {
+  return array(
+    'admin/structure/wem/segment' => array(
+      'title' => 'Segments',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('wem_segment_admin_view_segments_form'),
+      'access arguments' => array('wem admin segments'),
+      'weight' => 3,
+      'file' => 'wem_segment.admin.inc',
+      'description' => 'Manage WEM user segments and segmentation rules.',
+    ),
+    'admin/structure/wem/segment/add' => array(
+      'title' => 'Add segment',
+      'access arguments' => array('wem admin segments'),
+      'type' => MENU_LOCAL_ACTION,
+      'weight' => 1,
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('wem_segment_admin_add_segment_form'),
+      'file' => 'wem_segment.admin.inc',
+      'description' => 'Add a new user segment.',
+    ),
+    'admin/structure/wem/segment/view' => array(
+      'title' => 'View Segments',
+      'access arguments' => array('wem admin segments'),
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+      'weight' => 1,
+      'file' => 'wem_segment.admin.inc',
+      'description' => 'View user segments.',
+    ),
+    'admin/structure/wem/segment/rules' => array(
+      'title' => 'Rules',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('wem_segment_admin_rule_form'),
+      'access arguments' => array('wem admin segments'),
+      'weight' => 3,
+      'type' => MENU_LOCAL_TASK,
+      'file' => 'wem_segment.admin.inc',
+      'description' => 'Create segmentation rules.',
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function wem_segment_permission() {
+  return array(
+    'wem admin segments' => array(
+      'title' => t('Admin WEM segments'),
+      'description' => t('Create/edit WEM segments and rules.'),
+    ),
+    'wem node segments' => array(
+      'title' => t('Node WEM segments'),
+      'description' => t('Add/change/remove segments from nodes.'),
+    ),
+  );
+}
+
+/**
+ * Checks to see if the nodes match the user segments.
+ *
+ * @param array $nodes
+ *   Array of nodes you want to filter out by segment.
+ * @param object $user
+ *   User object. If not supplied, the global $user object will be used.
+ *
+ * @return array
+ *   Nodes that match the user segment criteria.
+ */
+function wem_segment_filter_nodes(array $nodes, $user = NULL) {
+  $return = array();
+  if (empty($user)) {
+    global $user;
+  }
+  // Loop through nodes.
+  foreach ((array)$nodes as $n) {
+    // Foreach node segment, see what the params are and if the user
+    // should be shown the content.
+    if (!$n->segments) {
+      // If WEM is not enabled, just add it.
+      $return[$n->nid] = $n;
+      continue;
+    }
+    foreach ((array)$n->segments as $name => $params) {
+      // Check to see if the user has this segment.
+      if (in_array($name, $user->segments)) {
+        // User has the segment, check if they should see this content.
+        if ($params['has_segment'] == "show") {
+          // User needs to be shown this content.
+          $return[$n->nid] = $n;
+          continue 2;
+        }
+        elseif ($params['has_segment'] == "hide") {
+          // User cannot be shown this content.
+          unset($return[$n->nid]);
+          continue 2;
+        }
+        else {
+          // No preference, add by default.
+          $return[$n->nid] = $n;
+        }
+      }
+      else {
+        // User does not have this segment.
+        if ($params['no_segment'] == "show") {
+          // User needs to be shown this content.
+          $return[$n->nid] = $n;
+          continue 2;
+        }
+        elseif ($params['no_segment'] == "hide") {
+          // User cannot be shown this content.
+          unset($return[$n->nid]);
+          continue 2;
+        }
+        else {
+          // No preference, add by default.
+          $return[$n->nid] = $n;
+        }
+      }
+    }
+  }
+  return $return;
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function wem_segment_node_insert($node) {
+  if (!isset($node->segments)) {
+    return FALSE;
+  }
+  if ($node->segments['enable']) {
+    wem_segment_set_node_segments($node->nid, $node->segments['content']);
+  }
+  else {
+    wem_segment_set_node_segments($node->nid, NULL);
+  }
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function wem_segment_node_update($node) {
+  if (!isset($node->segments)) {
+    return FALSE;
+  }
+  if ($node->segments['enable']) {
+    wem_segment_set_node_segments($node->nid, $node->segments['content']);
+  }
+  else {
+    wem_segment_set_node_segments($node->nid, NULL);
+  }
+}
+
+/**
+ * Implements hook_node_load().
+ */
+function wem_segment_node_load($nodes, $types) {
+  foreach ($nodes as $n) {
+    $n->segments = wem_segment_get_node_segments($n->nid);
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function wem_segment_cron() {
+  // Need to rebuild cache_wem_segment.
+  cache_clear_all('*', 'cache_wem_segment', TRUE);
+  wem_segment_cache_rebuild();
+}
+
+/**
+ * Implements hook_user_load().
+ *
+ * We need to add the WEM ID and segments to ever user object that gets loaded.
+ */
+function wem_segment_user_load($users) {
+  foreach ($users as $u) {
+    $u->wem_id = wem_get_user_id();
+    $u->segments = wem_segment_load_user_segments($u->uid);
+  }
+}
+
+/**
+ * Returns the user segment from the cache.
+ */
+function wem_segment_load_user_segments($uid) {
+  $result = cache_get($uid, 'cache_wem_segment');
+  if (empty($result)) {
+    // Returns an empty array.
+    return array();
+  }
+  return $result->data;
+}
+
+/**
+ * Sets a node's segments.
+ */
+function wem_segment_set_node_segments($nid, $s) {
+  if (empty($s)) {
+    // Delete the node segments.
+    $query = db_delete('wem_segment_node')
+      ->condition('nid', $nid)
+      ->execute();
+  }
+  else {
+    $query = db_merge('wem_segment_node')
+      ->key(array('nid' => $nid))
+      ->fields(array(
+        'nid' => $nid,
+        'segments' => serialize($s),
+      ))
+      ->execute();
+  }
+  return $query;
+}
+
+/**
+ * Gets a node's segments.
+ */
+function wem_segment_get_node_segments($nid) {
+  $query = db_select('wem_segment_node', 'w')
+    ->fields('w', array('segments'))
+    ->condition('nid', $nid)
+    ->execute()
+    ->fetchField();
+  return unserialize($query);
+}
+
+/**
+ * Rebuilds the cache for speedier performance.
+ */
+function wem_segment_cache_rebuild() {
+  $wem = new WEMAnalyzer();
+  $wem->rebuildCache();
+}
+
+/**
+ * AJAX callback for the cache rebuild button on the admin form.
+ */
+function wem_segment_cache_rebuild_ajax() {
+  wem_segment_cache_rebuild();
+  return "<p>Segment cache rebuilt!</p>";
+}
+
+/**
+ * Adds add WEM Segments via JSON.
+ */
+function wem_segment_import_segments($json) {
+  if (!wem_segment_import_segments_validate($json)) {
+    return FALSE;
+  }
+  $obj = (object)drupal_json_decode($json);
+  foreach ($obj->segments as $s) {
+    if (!wem_segment_save_segment($s->name, $s->type, $s->params)) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+/**
+ * Imports WEM Segment Rules via JSON.
+ */
+function wem_segment_import_rules($json) {
+  if (!wem_segment_import_rules_validate($json)) {
+    return FALSE;
+  }
+  $obj = (object)drupal_json_decode($json);
+  foreach ($obj->rules as $r) {
+    $result = wem_segment_create_rule($r->event_name, $r->event_operator, $r->event_value, $r->event_category, $r->event_points);
+    if (!$result) {
+      return FALSE;
+    }
+  }
+  // All rules imported successfully.
+  return TRUE;
+}
+
+/**
+ * Validates the JSON used to import WEM Segment Rules.
+ */
+function wem_segment_import_rules_validate($json) {
+  $obj = (object)drupal_json_decode($json);
+
+  if (empty($obj)) {
+    // $json was not valid.
+    return FALSE;
+  }
+
+  // I'm thrilled is's JSON, but we need to make sure the other nescessary pieces are there.
+  if (!isset($obj->rules)) {
+    return FALSE;
+  }
+  // Loop through and check the required fields are there.
+  foreach ($obj->rules as $r) {
+    if (!isset($r->event_name) || !isset($r->event_category) || !isset($r->event_points)) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+/**
+ * Validates JSON that creates WEM Segments.
+ */
+function wem_segment_import_segments_validate($json) {
+  $obj = (object)drupal_json_decode($json);
+  if (empty($obj)) {
+    // $json was not valid.
+    return FALSE;
+  }
+  // We've got valid JSON, need to validate segments.
+  if (!isset($obj->segments)) {
+    return FALSE;
+  }
+  // Need to check each segment for valid params.
+  foreach ($obj->segments as $s) {
+    if (!isset($s->name) || empty($s->name)) {
+      return FALSE;
+    }
+    // Loop through matches rules.
+    if (!isset($s->params)) {
+      return FALSE;
+    }
+    foreach ($s->params as $r) {
+      if (!isset($r->category) || !isset($r->operator) || !isset($r->points)) {
+        return FALSE;
+      }
+    }
+  }
+  return TRUE;
+}

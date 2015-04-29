@@ -1,0 +1,28 @@
+.field .field-label {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.panels-flexible-region-2-menus {
+
+
+}
+
+
+html {
+    position: relative;
+    min-height: 100%;
+}
+body {
+    /* Margin bottom by footer height */
+    margin-bottom: 60px;
+
+}
+.footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    /* Set the fixed height of the footer here */
+    height: 60px;
+    background-color: #f5f5f5;
+}

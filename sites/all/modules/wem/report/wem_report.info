@@ -1,0 +1,16 @@
+name = WEM reporting
+description = Enables reports and statistics for the WEM core
+core = 7.x
+
+dependencies[] = wem
+stylesheets[all][] = wem_report.css
+scripts[] = wem_report.js
+
+package = Web Engagement Management
+
+; Information added by Drupal.org packaging script on 2014-03-20
+version = "7.x-1.0-beta2+102-dev"
+core = "7.x"
+project = "wem"
+datestamp = "1395276857"
+

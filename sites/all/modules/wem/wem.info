@@ -1,0 +1,19 @@
+name = WEM core
+description = Tracks user events throughout the site.
+core = 7.x
+configure = admin/config/workflow/wem
+package = Web Engagement Management
+
+files[] = wem.test
+
+dependencies[] = entity
+
+scripts[] = jquery.Storage.js
+scripts[] = wem.js
+
+; Information added by Drupal.org packaging script on 2014-03-20
+version = "7.x-1.0-beta2+102-dev"
+core = "7.x"
+project = "wem"
+datestamp = "1395276857"
+

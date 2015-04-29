@@ -1,0 +1,1004 @@
+<?php
+/**
+ * @file
+ * Base file containing the WEM Core
+ */
+
+/**
+ * Implements hook_wem_event_info().
+ */
+function wem_wem_event_info() {
+  $events = array(
+    'user_new' => array(
+      'title' => t('New User Creation'),
+      'description' => t("This event occurs whenever a new user account is created. The event value is the new user's ID."),
+    ),
+    'user_update' => array(
+      'title' => t('User Account Update'),
+      'description' => t("This event occurs whenever an existing user account is edited. The event value is the new user's ID."),
+    ),
+    'user_delete' => array(
+      'title' => t('User Deletion'),
+      'description' => t("This event occurs whenever an existing user account is deleted. The event value is the former user's ID."),
+    ),
+    'user_login' => array(
+      'title' => t('User Log-In'),
+      'description' => t("This event occurs whenever a user authenticates. The event value is the user's ID."),
+    ),
+    'user_logout' => array(
+      'title' => t('User Log-Out'),
+      'description' => t("This event occurs whenever a user terminates his/her session. The event value is the user's ID."),
+    ),
+    'user_form_submit' => array(
+      'title' => t('Form Submission'),
+      'description' => t("This event occurs whenever a Drupal form is submitted. The event value is the form ID. The event data includes all submitted form values."),
+    ),
+    'user_comment' => array(
+      'title' => t('Comment'),
+      'description' => t("This event occurs whenever a user submits a new comment. The event value is the node ID associated with the comment. The event data includes the comment object."),
+    ),
+    'user_submit_contact_form' => array(
+      'title' => t('Contact Form Submission'),
+      'description' => t('This event occurs whenever a user submits a "contact form." The event value is the email address to which the contact inquiry is sent. The event data includes all submitted form values.'),
+    ),
+    'user_submit_poll' => array(
+      'title' => t('Poll Vote'),
+      'description' => t('This event occurs whenever a user submits a response to a poll. The event value is the node ID of the poll to which the user is responding. The event data includes the user\'s response/vote/choice.'),
+    ),
+    'user_search' => array(
+      'title' => t('Site Search'),
+      'description' => t('This event occurs whenever a user submits the standard site search form. The event value is the search query string. The event data includes all submitted form values for the search form.'),
+    ),
+  );
+
+  return $events;
+}
+
+/**
+ * Implements hook_init().
+ */
+function wem_init() {
+  // Make the API path available to JavaScript.
+  $api_path = url('wem/api', array('absolute' => TRUE));
+  $settings = array(
+    "wem" => array(
+      'analytics' => array(
+        'ga' => array(
+          'enabled' => variable_get('wem_analytics_ga'),
+          'universal' => variable_get('wem_analytics_ga_universal'),
+        ),
+      ),
+      'paths' => array('api' => $api_path),
+    ),
+  );
+  drupal_add_js($settings, 'setting');
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function wem_entity_info() {
+  return array(
+    'wem_event' => array(
+      'label' => t('WEM Event'),
+      'base table' => 'wem',
+      'entity keys' => array(
+        'id' => 'id',
+      ),
+    ),
+  );
+}
+
+/**
+ * Formatting data to be attached to HTML elements.
+ *
+ * @param array $js_events
+ *   An array of JavaScript events to add the system event. (e.g. click, hover)
+ * @param string $name
+ *   Event name
+ * @param string $value
+ *   Event value
+ * @param string $data
+ *   Event data
+ * @param bool $bypass_queue
+ *   Whether or not the event should be sent instantly to the server.
+ *   Most events that will affect segmentation can use the queue.
+ *
+ * @return string
+ *   Returns the data-wem attribute HTML.
+ */
+function wem_data_attribute($js_events, $name, $value, $data = NULL, $bypass_queue = FALSE) {
+  $json = array(
+    'js_events' => $js_events,
+    'name' => $name,
+    'value' => $value,
+    'data' => $data,
+    'bypass' => $bypass_queue,
+  );
+  return str_replace('"', "\\", drupal_json_encode($json));
+}
+
+/**
+ * Create a link with WEM tracking on it.
+ *
+ * @param string $title
+ *   Link title.
+ * @param string $url
+ *   Link URL. Do not use url() function.
+ * @param string $event_name
+ *   Name of the event to track.
+ * @param string $event_value
+ *   Event value to store.
+ * @param string $event_data
+ *   Misc event data.
+ * @param array $attributes
+ *   Links attributes. WEM attributes will be added automatically.
+ *
+ * @return string
+ *   Returns the link HTML.
+ */
+function wem_link($title, $url, $event_name, $event_value = NULL, $event_data = NULL, $attributes = array()) {
+  $attributes['attributes']['data-wem'] = wem_data_attribute(array('click'), $event_name, $event_value, $event_data);
+  return l($title, $url, $attributes);
+}
+
+/**
+ * Alias for wem_link().
+ * @see wem_link
+ */
+function wem_l($title, $url, $event_name, $event_value = NULL, $event_data = NULL, $attributes = array()) {
+  return wem_link($title, $url, $event_name, $event_value, $event_data, $attributes);
+}
+
+/**
+ * Implements hook_menu().
+ */
+function wem_menu() {
+  return array(
+    'wem/api' => array(
+      'type' => MENU_CALLBACK,
+      'page callback' => 'wem_api',
+      'access arguments' => array('access content'),
+      'delivery callback' => 'drupal_json_output',
+    ),
+    'wem/api/%/%' => array(
+      'type' => MENU_CALLBACK,
+      'page callback' => 'wem_api',
+      'page arguments' => array(2, 3),
+      'access arguments' => array('access content'),
+      'delivery callback' => 'drupal_json_output',
+    ),
+    'wem/api/get_token' => array(
+      'type' => MENU_CALLBACK,
+      'page callback' => 'wem_api_print_token',
+      'access arguments' => array('access content'),
+    ),
+    'wem/api/get_uid' => array(
+      'type' => MENU_CALLBACK,
+      'page callback' => 'wem_api_print_uid',
+      'access arguments' => array('access content'),
+    ),
+    'wem/track' => array(
+      'type' => MENU_CALLBACK,
+      'page callback' => 'wem_api_url_tracker',
+      'access arguments' => array('access content'),
+    ),
+    'admin/config/workflow/wem' => array(
+      'title' => 'Web Engagement Management',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('wem_admin_form'),
+      'access arguments' => array('admin wem'),
+      'type' => MENU_NORMAL_ITEM,
+      'file' => 'wem.admin.inc',
+      'description' => 'Configure WEM tracking permissions/roles.',
+    ),
+    'admin/config/workflow/wem/settings' => array(
+      'title' => 'Settings',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('wem_admin_form'),
+      'access arguments' => array('admin wem'),
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+      'weight' => 1,
+      'file' => 'wem.admin.inc',
+      'description' => 'Configure the WEM module.',
+    ),
+  );
+}
+
+/**
+ * Menu callback for the javascript to hit via AJAX.
+ *
+ * @param string $token
+ *   Secure WEM token to validate data.
+ * @param int $uid
+ *   User ID
+ *
+ * @return array
+ *   Returns array of information that will be sent back as JSON.
+ */
+function wem_api($token, $uid) {
+  // Make sure this response is never cached.
+  wem_no_cache_headers();
+  // Need to verify that token is valid before adding data.
+  if (!wem_valid_token($token, $uid)) {
+    drupal_add_http_header("Status", "403 Forbidden");
+    return array("message" => "invalid token");
+  }
+  // Make sure the user has actually sent us some events.
+  if (!isset($_POST['events']) || empty($_POST['events'])) {
+    drupal_add_http_header("Status", "400 Bad Request");
+    return array("message" => "no events captured");
+  }
+  $events = drupal_json_decode($_POST['events']);
+  // For each event, track it.
+  foreach ((array)$events as $event) {
+    // Make sure the event fields are setup properly.
+    $event = wem_map_event($event);
+    // Track the event.
+    wem_event_track($event);
+  }
+  return array("message" => "okay");
+}
+
+/**
+ * Menu callback for tracking via the URL.
+ */
+function wem_api_url_tracker() {
+  // Make sure this response is never cached.
+  wem_no_cache_headers();
+  $args = unserialize(base64_decode($_GET['args']));
+  $ver = $args['ver'];
+  $event = array(
+    'name' => check_plain($args['name']),
+    'value' => check_plain($args['value']),
+    'data' => check_plain($args['data']),
+  );
+  $redirect = isset($args['redirect']) ? $args['redirect'] : "<front>";
+  // Need to verify this information is valid.
+  if (wem_api_hash_validate($event, $ver)) {
+    // Make sure the user has WEM attributes created.
+    $uid = wem_get_user_id();
+    wem_get_token($uid);
+    wem_event_track($event);
+  }
+  drupal_goto($redirect);
+}
+
+/**
+ * Creates a hash for use within a URL.
+ *
+ * @param array $event
+ *   Event array including name, value, and data.
+ *
+ * @return string
+ *   Returns the hash.
+ */
+function wem_api_hash_create(array $event) {
+  $hash = hash_hmac('sha512', serialize($event), variable_get('wem_token_value'));
+  return $hash;
+}
+
+/**
+ * Validate a hash coming from a URL.
+ *
+ * @param array $event
+ *   Event array including name, value, and data.
+ * @param string $hash
+ *   Hash to compare with.
+ *
+ * @return bool
+ *   Returns whether or not the hash is valid.
+ */
+function wem_api_hash_validate(array $event, $hash = "") {
+  $compare = hash_hmac('sha512', serialize($event), variable_get('wem_token_value'));
+  if ($compare === $hash) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Create a link for use in campaign tracking.
+ *
+ * @param array $event
+ *   Event array including name, value, and data.
+ * @param string $redirect
+ *   URL to redirect to after the user hits the link.
+ *
+ * @return string
+ *   Returns the string of the URL.
+ */
+function wem_tracker_link(array $event, $redirect = "<front>") {
+  if (!isset($event['value'])) {
+    $event['value'] = "";
+  }
+  if (!isset($event['data'])) {
+    $event['data'] = "";
+  }
+  $query = $event;
+  $query['ver'] = wem_api_hash_create($event);
+  $query['redirect'] = $redirect;
+  return url("wem/track", array(
+    "query" => array("args" => base64_encode(serialize($query))),
+    "absolute" => TRUE,
+  ));
+}
+
+/**
+ * Cleans incoming events and puts them into an object.
+ *
+ * @param array $event
+ *   Event array from the JavaScript API.
+ *
+ * @return array
+ *   Keyed event array.
+ */
+function wem_map_event($event) {
+  $return = array();
+  $return['name'] = check_plain($event[0]);
+  $return['value'] = check_plain($event[1]);
+  $return['data'] = $event[2];
+  $return['timestamp'] = check_plain($event[3]);
+  return $return;
+}
+
+/**
+ * Renders a token for the front end.
+ */
+function wem_api_print_token() {
+  wem_no_cache_headers();
+  print wem_get_token();
+  drupal_exit();
+}
+
+/**
+ * Renders the user's uid for the front end.
+ */
+function wem_api_print_uid() {
+  wem_no_cache_headers();
+  print wem_get_user_id();
+  drupal_exit();
+}
+
+/**
+ * Sends headers that prevent caching.
+ */
+function wem_no_cache_headers() {
+  drupal_add_http_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  drupal_add_http_header("Cache-Control", "post-check=0, pre-check=0");
+  drupal_add_http_header("Pragma", "no-cache");
+  drupal_add_http_header("Expires", date('r', REQUEST_TIME - 60));
+}
+
+/**
+ * Gets a unique token for the user.
+ */
+function wem_get_token($uid = FALSE) {
+  if (!$uid) {
+    $uid = wem_get_user_id();
+  }
+  return drupal_hmac_base64($uid, variable_get('wem_token_value') . drupal_get_private_key() . drupal_get_hash_salt());
+}
+
+/**
+ * Returns the user ID.
+ *
+ * If the user is not logged in (anonymous),
+ * a unique ID will be generated for them.
+ */
+function wem_get_user_id() {
+  global $user;
+  if ($user->uid) {
+    return $user->uid;
+  }
+  // Generate a random string for the uid.
+  if (!isset($_COOKIE['Drupal_visitor_wem_user_id'])) {
+    $uid = user_password(16);
+    user_cookie_save(array('wem_user_id' => $uid));
+    return $uid;
+  }
+  else {
+    return $_COOKIE['Drupal_visitor_wem_user_id'];
+  }
+}
+
+/**
+ * Implements hook_user_insert().
+ *
+ * Tracks new users being added.
+ */
+function wem_user_insert(&$edit, $account, $category) {
+  wem_event_track(array(
+    'name' => 'user_new',
+    'value' => $account->uid,
+    'uid' => $account->uid,
+  ));
+}
+
+/**
+ * Implements hook_user_update().
+ *
+ * Tracks users updating there info.
+ */
+function wem_user_update(&$edit, $account, $category) {
+  wem_event_track(array(
+    'name' => 'user_update',
+    'value' => $account->uid,
+    'uid' => $account->uid,
+  ));
+}
+
+/**
+ * Implements hook_user_delete().
+ *
+ * Track when a user account is deleted.
+ */
+function wem_user_delete($account) {
+  wem_event_track(array(
+    'name' => 'user_delete',
+    'value' => $account->uid,
+    'uid' => $account->uid,
+  ));
+}
+
+/**
+ * Determine whether or not a token is valid.
+ *
+ * @param string $token
+ *   Token value
+ * @param int $uid
+ *   User ID
+ *
+ * @return bool
+ *   Returns true if the token is valid.
+ */
+function wem_valid_token($token, $uid = 0) {
+  $compare = drupal_hmac_base64($uid, variable_get('wem_token_value') . drupal_get_private_key() . drupal_get_hash_salt());
+  if ($compare === $token) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Returns an array of pages not to track.
+ */
+function wem_get_pages_dont_track() {
+  return variable_get('wem_pages_dont_track', array());
+}
+
+/**
+ * Save pages not to track.
+ *
+ * @param array $pages
+ *   Array of pages.
+ */
+function wem_save_pages_dont_track($pages) {
+  variable_set('wem_pages_dont_track', $pages);
+}
+
+/**
+ * Gets tracked node types set in the WEM settings page.
+ */
+function wem_get_tracked_content_types() {
+  $types = node_type_get_names();
+  $return = array();
+  foreach ($types as $type => $title) {
+    $return[$type] = variable_get('wem_track_content_type_' . $type, FALSE);
+  }
+  return $return;
+}
+
+/**
+ * Gets tracked user roles set in the WEM settings page.
+ */
+function wem_get_tracked_user_roles() {
+  $roles = user_roles();
+  $return = array();
+  foreach ($roles as $rid => $title) {
+    $machine = wem_machine_name($title);
+    if (variable_get('wem_track_user_role_' . $machine, FALSE)) {
+      $return[$rid] = $title;
+    }
+  }
+  return $return;
+}
+
+/**
+ * Implements hook_wem_event_track_EVENT_alter().
+ */
+function wem_wem_event_track_page_view_alter(&$fields) {
+  global $base_url;
+  $path = str_replace($base_url . "/", "", $fields['value']);
+
+  $user = user_load($fields['uid']);
+
+  // Check if we are tracking this username.
+  if ($user->uid) {
+    if (in_array($user->name, variable_get('wem_users_dont_track', array()))) {
+      $fields = array();
+      return FALSE;
+    }
+  }
+
+  // Check if we should be tracking this type of page.
+  if ($n = menu_get_object(NULL, NULL, $path)) {
+    $track = wem_get_tracked_content_types();
+    if (!$track[$n->type]) {
+      $fields = array();
+      return FALSE;
+    }
+  }
+
+  // Need to check if we dont track this page.
+  $dont_track = wem_get_pages_dont_track();
+  foreach ($dont_track as $page) {
+    if (preg_match($page, $path)) {
+      $fields = array();
+      return FALSE;
+    }
+  }
+
+  // Check if we are tracking this user's roles.
+  $exit = TRUE;
+  if (!$user) {
+    $user_roles[] = user_role_load(DRUPAL_ANONYMOUS_RID)->name;
+  }
+  else {
+    $user_roles = $user->roles;
+  }
+  $tracked_roles = wem_get_tracked_user_roles();
+  foreach ($user_roles as $role) {
+    $rid = user_role_load_by_name($role)->rid;
+    if ($tracked_roles[$rid]) {
+      $exit = FALSE;
+    }
+  }
+  if ($exit) {
+    $fields = array();
+    return FALSE;
+  }
+  $real_path = drupal_lookup_path('source', $path);
+  if (!$real_path) {
+    $real_path = $path;
+  }
+  $data = array(
+    'path' => $path,
+    'absolute' => $fields['value'],
+    'real_path' => $real_path,
+  );
+  $fields = array(
+    'name' => 'page_view',
+    'value' => $path,
+    'data' => serialize($data),
+    'uid' => $fields['uid'],
+  );
+  return TRUE;
+}
+
+/**
+ * Gets the user's last event.
+ *
+ * @param array $conditions
+ *   Array of conditions to filter the query by.
+ *
+ * @return object
+ *   Returns an event object.
+ */
+function wem_last_event($conditions = array()) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'wem_event');
+  foreach ($conditions as $field => $val) {
+    $query->propertyCondition($field, $val);
+  }
+  $result = $query->propertyOrderBy('timestamp', "DESC")
+    ->range(0, 1)
+    ->execute();
+  $ids = array_keys($result['wem_event']);
+  $entities = entity_load('wem_event', $ids);
+  return array_shift($entities);
+}
+
+/**
+ * Gets events that match the conditions you pass.
+ *
+ * @param array $conditions
+ *   Array of conditions to match. Format should be 'field'=>'value'.
+ *   Valid fields include name, value, data, uid.
+ *
+ * @return array
+ *   WEM Event objects.
+ */
+function wem_get_events($conditions = array()) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'wem_event');
+  foreach ($conditions as $field => $val) {
+    $query->propertyCondition($field, $val);
+  }
+  $results = $query->execute();
+
+  return entity_load('wem_event', array_keys($results['wem_event']));
+}
+
+/**
+ * Check if a user has an event that matches the conditions.
+ *
+ * @param int $uid
+ *   User ID
+ * @param string $name
+ *   Event name
+ *
+ * @return bool
+ *   Return TRUE if user has had that event.
+ */
+function wem_user_has_event($uid, $name) {
+  $count = wem_event_count(array('uid' => $uid, 'name' => $name));
+  if ($count > 0) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Counts the number of events that match the passed conditions.
+ *
+ * @param array $conditions
+ *   Array of conditions to match. Format should be 'field'=>'value'.
+ *   Valid fields include name, value, data, uid.
+ *
+ * @return int
+ *   Number of events that match the conditions.
+ */
+function wem_event_count($conditions = array()) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'wem_event');
+  foreach ($conditions as $field => $val) {
+    $query->propertyCondition($field, $val);
+  }
+  return $query->count()->execute();
+}
+
+/**
+ * Get events within a date range.
+ *
+ * @param array $conditions
+ *   Array of conditions to match. Format should be 'field'=>'value'.
+ *   Valid fields include start_time, end_time, name, value, data, uid.
+ *
+ * @return array
+ *   Array of event objects.
+ */
+function wem_event_date_range($conditions = array()) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'wem_event');
+  $query->propertyCondition('timestamp', $conditions['start_time'], '>=');
+  $query->propertyCondition('timestamp', $conditions['end_time'], '<=');
+  foreach ($conditions as $field => $val) {
+    if ($field !== 'start_time' && $field !== 'end_time') {
+      $query->propertyCondition($field, $val);
+    }
+  }
+  $results = $query->execute();
+  return entity_load('wem_event', array_keys($results['wem_event']));
+}
+
+/**
+ * Implements hook_user_login().
+ *
+ * If the user was browsing the site anonymously,
+ * we need to convert their anonymous data into their actual user data.
+ */
+function wem_user_login(&$edit, $account) {
+  wem_event_track(array(
+    'name' => 'user_login',
+    'value' => $account->uid,
+    'uid' => $account->uid,
+  ));
+  // Need to add settings so JS knows we are logging in.
+  if (isset($_COOKIE['Drupal_visitor_wem_user_id']) && $anon_id = $_COOKIE['Drupal_visitor_wem_user_id']) {
+    db_update('wem')
+      ->fields(array(
+        'uid' => $account->uid,
+      ))
+      ->condition("uid", $anon_id)
+      ->execute();
+    user_cookie_delete('wem_user_id');
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_user_logout().
+ *
+ * Track a user's logout event.
+ */
+function wem_user_logout($account) {
+  wem_event_track(array(
+    'name' => 'user_logout',
+    'value' => $account->uid,
+    'uid' => $account->uid,
+  ));
+}
+
+/**
+ * Get a machine safe string.
+ *
+ * @param string $string
+ * @param string $replacement
+ *
+ * @return string
+ */
+function wem_machine_name($string, $replacement = '_') {
+  return preg_replace('/[^a-z0-9]+/', $replacement, strtolower($string));
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Alter forms on the site to track their submissions.
+ * Core forms are tracked with specific params,
+ * other forms are tracked with default params.
+ */
+function wem_form_alter(&$form, &$form_state, $form_id) {
+  switch ($form_id) {
+    case "search_form":
+      $form['#submit'][] = 'wem_search_form_track';
+      break;
+
+    case "search_form_block":
+      $form['#submit'][] = 'wem_search_form_track';
+      break;
+
+    case "poll_view_voting":
+      $form['vote']['#submit'][] = 'wem_poll_view_voting_track';
+      break;
+
+    case "contact_site_form":
+      $form['#submit'][] = 'wem_contact_site_form_track';
+      break;
+
+    default:
+      // Track other types of form submissions.
+      $form['#submit'][] = 'wem_form_track';
+  }
+}
+
+/**
+ * Generic submit handler for tracking any form submission.
+ */
+function wem_form_track($form, $form_state) {
+  wem_event_track(array(
+    'name' => 'user_form_submit',
+    'value' => $form['#id'],
+    'data' => serialize($form_state['values']),
+  ));
+}
+
+/**
+ * Implements hook_comment_presave().
+ *
+ * Track a user commenting on something.
+ */
+function wem_comment_presave($comment) {
+  wem_event_track(array(
+    'name' => 'user_comment',
+    'value' => $comment->nid,
+    'data' => serialize($comment),
+  ));
+}
+
+/**
+ * Custom submit handler to track contact form submissions.
+ */
+function wem_contact_site_form_track($form, $form_state) {
+  wem_event_track(array(
+    'name' => 'user_submit_contact_form',
+    'value' => $form_state['values']['mail'],
+    'data' => serialize($form_state['values']),
+  ));
+}
+
+/**
+ * Custom submit handler to track poll submissions.
+ */
+function wem_poll_view_voting_track($form, $form_state) {
+  wem_event_track(array(
+    'name' => 'user_submit_poll',
+    'value' => menu_get_object()->nid,
+    'data' => $form_state['values']['choice'],
+  ));
+}
+
+/**
+ * Custom submit handler for tracking search queries.
+ */
+function wem_search_form_track($form, $form_state) {
+  if (!empty($form_state['values']['keys'])) {
+    wem_event_track(array(
+      'name' => 'user_search',
+      'value' => $form_state['values']['keys'],
+      'data' => serialize($form_state['values']),
+    ));
+  }
+}
+
+/**
+ * If debugging is enabled, data will be printed to the screen.
+ *
+ * @param array $fields
+ *   Array of event fields to be shown to the user.
+ */
+function wem_debug($fields = array()) {
+  if (variable_get('wem_debug_mode', FALSE)) {
+    drupal_set_message(t("WEM DEBUGGING - :debug", array(":debug" => var_export($fields, TRUE))), 'status');
+  }
+}
+
+/**
+ * Check if too many events have been captured recently.
+ */
+function wem_event_overflow($uid = FALSE) {
+  if (!$uid) {
+    $uid = wem_get_user_id();
+  }
+  // Get number of events for last 60 seconds.
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'wem_event')
+    ->propertyCondition('uid', $uid)
+    ->propertyCondition('timestamp', REQUEST_TIME - 60, '>=');
+  $count = $query->count()->execute();
+  if ($count > 30) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Sends a WEM event to the system.
+ *
+ * @param array $fields
+ *   Array of fields to add to the event.
+ *   Valid fields are name, value, data, uid, time.
+ *
+ * @return mixed
+ *   The return value is dependent on the database connection.
+ */
+function wem_event_track($fields = array()) {
+
+  // Check required fields.
+  if (empty($fields['name'])) {
+    return FALSE;
+  }
+
+  // If no user ID set, we need to get one.
+  if (empty($fields['uid'])) {
+    $fields['uid'] = wem_get_user_id();
+  }
+
+  if (empty($fields['data'])) {
+    $fields['data'] = NULL;
+  }
+
+  if (empty($fields['value'])) {
+    $fields['value'] = NULL;
+  }
+
+  // Allow other modules to alter this specific event type.
+  drupal_alter('wem_event_track_' . $fields['name'], $fields);
+
+  // Allow other modules to alter this event.
+  drupal_alter('wem_event_track', $fields);
+
+  // If the alter hooks set $fields to empty.
+  if (empty($fields)) {
+    return FALSE;
+  }
+
+  // Make sure too many events are not being added for this user.
+  if (wem_event_overflow($fields['uid'])) {
+    return FALSE;
+  }
+
+  // Send fields for debugging.
+  wem_debug($fields);
+
+  if (variable_get('wem_analytics_ga')) {
+    wem_send_google_analytics_event($fields['name'], $fields['value'], $fields['data']);
+  }
+
+  // If no time is set, just use the current time.
+  if (empty($fields['timestamp'])) {
+    $fields['timestamp'] = REQUEST_TIME;
+  }
+
+  // Allow other modules to react on all events.
+  module_invoke_all('wem_event_track', $fields);
+  // Allow other modules to react to this specific event.
+  module_invoke_all('wem_event_track_' . $fields['name'], $fields);
+
+  return db_insert('wem')
+    ->fields($fields)
+    ->execute();
+}
+
+/**
+ * Delete an event based on passed conditions.
+ *
+ * @param array $conditions
+ *   Array of fields to match on.
+ *   Valid fields are name, value, data, uid, time.
+ *
+ * @return mixed
+ *   The return value is dependent on the database connection.
+ */
+function wem_event_delete($conditions = array()) {
+  // Allow other modules to hook into a deletion of an event.
+  module_invoke_all('wem_event_delete', $conditions);
+  $query = db_delete('wem');
+  foreach ($conditions as $field => $val) {
+    $query->condition($field, $val);
+  }
+  return $query->execute();
+}
+
+/**
+ * Implements hook_permission().
+ */
+function wem_permission() {
+  return array(
+    'admin wem' => array(
+      'title' => t('WEM settings'),
+      'description' => t('View/edit WEM settings.'),
+    ),
+  );
+}
+
+/**
+ * Report an event to Google Analytics, abstracting version-specific syntax.
+ * @todo: consider breaking this out into a wem_[google]_analytics module.
+ * @param $event_name
+ * @param $event_value
+ * @param $event_data
+ */
+function wem_send_google_analytics_event($event_name, $event_value, $event_data) {
+
+  if (variable_get('wem_analytics_ga_universal', FALSE)) {
+    // @todo: just use GAMP after adding it to GA module. Update: this code
+    //  seems to rely on the fact that the inline script won't be executed when
+    //  this is hit via AJAX; otherwise we'd double-report events. Using GAMP
+    //  would be too effective for its own good, unless we distinguish here
+    //  between events of client-side and server-side origination
+    //  (NRD 2014-03-19).
+    $safe_data = wem_google_analytics_validate_event_label($event_data, TRUE);
+    $script = "ga('send', 'event', '$event_name', '$event_value', '$safe_data');";
+  }
+  else {
+    $safe_data = wem_google_analytics_validate_event_label($event_data, FALSE);
+    $script = "_gaq.push(['_trackEvent', '{$event_name}', '{$event_value}', '{$safe_data}']);";
+  }
+  // Add to footer to ensure GA script is loaded first. This is simpler than
+  //  safely weighting it to appear just after GA script in the header.
+  drupal_add_js($script, array('type' => 'inline', 'scope' => 'footer',));
+}
+
+/**
+ * Validate an event label for a GA event.
+ *  @todo: This is a limited, shortsighted helper function. It should at least
+ *  be extended to validate other event components, but this should really be
+ *  done by the GA module.
+ * @param $label
+ */
+function wem_google_analytics_validate_event_label($label, $gua = TRUE) {
+  // Prevent overlong event label strings.
+  $byte_limit = $gua ? 2048 : 500;
+  // See what encoding is currently being used, so as to leave it undisturbed.
+  $current_encoding = mb_internal_encoding();
+  // Use UTF-8 for this operation.
+  mb_internal_encoding('UTF-8');
+  // URL-encode the label string and reduce it to 2048 bytes if need be.
+  $safe_label = mb_strcut(urlencode($label), 0, $byte_limit);
+  // Restore the previous encoding so as not to bother anyone else.
+  mb_internal_encoding($current_encoding);
+
+  return $safe_label;
+}
