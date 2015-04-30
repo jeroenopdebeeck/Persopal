@@ -88,25 +88,24 @@ function persopal_views_query_alter(&$view, &$query) {
             $cords = array('latitude' => $_SESSION['smart_ip']['location']['latitude'], 'longitude' => $_SESSION['smart_ip']['location']['longitude']);
         }
 
-      // $lat = $cords['latitude'];
-      // $long = $cords['longitude'];
+       $lat = $cords['latitude'];
+       $long = $cords['longitude'];
 
-        $lat = 51;
-        $long = 4.7;
+       
 
 
 
         $query->where[1]['conditions'][2]['field'] = "( 6371 * ACOS( COS( RADIANS($lat) ) * COS( RADIANS(field_data_field_geofield.field_geofield_lat) )
                                                         * COS( RADIANS(field_data_field_geofield.field_geofield_lon) - RADIANS($long) )
                                                         + SIN( RADIANS($lat) ) * SIN( RADIANS(field_data_field_geofield.field_geofield_lat) ) ) )       " .
-                                                        " < 50";
+                                                        " < 20";
 
     }
 
 }
 
 /**
- * Implements hook_views_pre_render()
+ * Implements hook_views_pre_view()
  */
 
 function persopal_views_pre_view(&$view) {
